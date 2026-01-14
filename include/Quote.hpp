@@ -8,6 +8,11 @@ public:
   Quote() = default;
   Quote(const std::string &book, double sales_price):bookNo(book), price(sales_price){}
 
+  Quote(const Quote&) = default;
+  Quote(Quote&&) noexcept = default;
+  Quote& operator=(const Quote&) = default;
+  Quote& operator=(Quote&&) noexcept = default;
+
   std::string isbn() const { return bookNo;}
   virtual double net_price(std::size_t n) const { return n * price; };
   virtual ~Quote() = default;

@@ -1,12 +1,23 @@
-{
+{   "version": "0.2.0",
     "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Launch",
+            "program": "${workspaceFolder}/build/app",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
     {
-        "type": "lldb",
+        "name": "(Windows) 启动",
+        "type": "cppvsdbg",
         "request": "launch",
-        "name": "Launch",
-        "program": "${workspaceFolder}/build/app",
+        "program": "${workspaceFolder}/build/app.exe",
         "args": [],
-        "cwd": "${workspaceFolder}"
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}",
+        "environment": [],
+        "console": "integratedTerminal"
     }
     ]
 }

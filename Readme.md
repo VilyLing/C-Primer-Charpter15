@@ -1241,4 +1241,635 @@ int main(){
 // note: unimplemented pure virtual method 'net_price' in 'Disc_quote' 表示表达无法实现纯虚函数在该类
 ```
 
-### 访问控制与继承
+## 15.5 访问控制与继承
+每个类分别控制各自的成员初始化过程，还分别控制着其成员是否可以被派生类访问。
+### 受保护的成员
+`protected`关键字来声明它希望与派生类分享但是不想被其他公开访问使用的成员。
+1. 和私有成员类似，受保护的成员对于类的用户来说是不可访问的。
+2. 和公有成员类似，受保护的成员对于派生类的成员和友元来说是可访问的
+3. 派生类的成员或友元只能通过派生类对象来访问基类的受保护对象。
+4. 派生类对于一个基类对象中的受保护成员没有任何访问特权。
+```cpp
+class Base{
+    protected:
+        int prot_mem;
+};
+class Sneak : public Base{
+    friend void clobber(Sneaky&);
+    friend void clobber(Base&);
+    int j;
+};
+
+void clobber(Sneaky& s){s.j = s.prot_mem = 0;}//正确。通过Sneaky对象访问private和protected成员
+void clobber(Base& b){b.prot_mem = 0;} //错误 clobber不能访问Base的protected成员
+```
+
+派生类的成员和友元智能访问派生类对象中的基类部分的受保护成员，对于普通基类对象中的成员不具有特殊的访问权限。
+
+### 公有、私有和受保护继承
+访问权限的因素影响：
+1. 基类中该成员的访问说明符： 对基类成员的访问权限只与基类中的访问说明符有关。
+2. 派生类的派生列表中的访问说明符： 派生访问说明符对于派生类的成员(友元)能否访问其直接基类的成员没任何影响。
+```cpp
+class Base{
+    public:
+        void pub_mem();
+    protected:
+        int prot_mem;
+    private:
+        char priv_mem;
+};
+
+struct Pub_Derv : public Base{
+    int f(){return prot_mem;}//正确 访问protected成员
+    char g(){return priv_mem;}//错误 无法访问private成员
+};
+
+struct Priv_Derv: private Base{
+    int f1() const { return prot_mem;}//正确，private不影响派生类访问权限
+};
+```
+
+派生访问说明符： 控制派生类用户对于基类成员的访问权限
+1. public: 派生类遵循基类原有的说明符
+2. private: 派生类继承基类的所有成员都变私有
+3. protected: 派生类继承基类的所有成员都变受保护的
+```cpp
+Pub_Derv d1;
+Priv_Derv d2;
+d1.pub_mem(); //正确 pub_mem在Pub_Derv中是public
+d2.pub_mem();//错误 pub_mem在Priv_Derv中是private
+
+struct Derived_from_Public: public Pub_Derv{
+    int use_base(){return prot_mem;}//正确，在Pub_Derv仍然是protected
+};
+
+struct Derived_from_Private: public Priv_Derv{
+    int use_base(){return prot_mem;}//错误，在Priv_Derv中已经隐性转换为private私有成员了
+};
+```
+
+<table>
+    <tr>
+        <th> </th>
+        <th>基类访问说明符</th>
+        <th>public</th>
+        <th>private</th>
+        <th>protected</th>
+    </tr>
+    <tr>
+        <th>派生访问说明符</th>
+        <td></td>
+        <td>基类成员在派生类中的访问权限</td>
+        <td>基类成员在派生类中的访问权限</td>
+        <td>基类成员在派生类中的访问权限</td>
+    </tr>
+    <tr>
+        <th>public</th>
+        <td></td>
+        <td>public</td>
+        <td>不可访问</td>
+        <td>protected</td>
+    </tr>
+    <tr>
+        <th>private</th>
+        <td></td>
+        <td>private</td>
+        <td>不可访问</td>
+        <td>private</td>
+    </tr>
+    <tr>
+        <th>protected</th>
+        <td></td>
+        <td>protected</td>
+        <td>不可访问</td>
+        <td>protected</td>
+    </tr>
+</table>
+
+
+### 派生类向基类转换的可访问性
+继承方式 | 指针/引用转换 | 对象转换
+:--:|:--:|:--:
+public|总是允许|总是允许
+private|仅在派生类中允许|不允许
+protected|仅在派生类及其子类中允许|不允许
+
+```cpp
+class B{};
+//派生类对直接基类的类型转换对于成员函数和友元函数都是可访问的 与派生访问权限无关
+
+class D : public B{
+    
+    friend void D_use_B(Base& item);
+    void transToB(Base& item){ item = *this; }
+}; //可以直接转换成基类
+D d1;
+B *b = &d1;
+
+class D2 : protected B{
+    friend void D2_use_B(B& item);
+    void transToB(B& item){ item = *this; }
+};
+D2 d2;
+// b = &d2; 不能完成该转换
+
+class D3 : private B{
+    friend void D3_use_B(B& item);
+    void transToB(Base& item){ item = *this; }
+};
+D3 d3;
+// b = &d3; 不能使用该转换
+
+class D_Pub_D : public D {
+    friend void D_Pub_D_Use_B(B&);//可行
+    void transToB(B& b){ b = *this;} //可行
+};
+
+class D_Prot_D : protected D2{
+    friend void D_Pro_D_Use_B(B&);//可行
+    void transToB(B&b){ b = *this;}//可行
+};
+
+class D_Priv_D: private D3{
+    // firend void D_Priv_D_Use_B(B&); 被直接基类隐藏了，无法完成类型转换
+    // void transToB(B&b){ b = *this}; 同上
+};
+```
+
+关键概念：类的设计与被保护的成员
+1. 类的实现者: 负责编写类的成员和友元的代码——既能访问公有部分(接口)也能访问私有部分
+2. 普通用户：只能访问公有部分(接口)
+3. 派生类的用户：能访问公有部分(接口)和受保护部分。
+
+### 友元与继承
+友元不能传递也不能继承。—— 每个类负责各自成员的访问权限。
+
+### 改变个别成员的可访问性
+有时候需要改变派生类继承的权限，可以通过`using`声明。
+```cpp
+class Base{
+    public: 
+    std::size_t size() const {return n;}
+    protected:
+    std::size_t n;
+};
+class Derived: private Base{
+    public:
+        using Base::size;
+    protected:
+        using Base::n;
+};
+```
+
+在类的内部使用`using`声明语句，将类的直接和间接基类中的任何可访问成员(除了`private`成员)标记出来。
+
+using声明|public|private|protected
+:--:|:--:|:--:|:--:
+访问权限|类的所有用户都可以访问|只有类内部和友元可以访问|派生类、友元、成员都可以访问
+
+### 默认的继承保护级别
+默认情况下：
+`struct`:public
+`class`:private
+
+```cpp
+class Base{};
+struct D1 : Base{};//public
+class D2 : base{}; //private
+```
+`struct`和`class`唯一的差别：
+1. 默认访问说明符
+2. 默认派生访问说明符
+私有派生类最好显式`private`声明出来，令私有继承关系清晰明了。
+
+### 15.5节练习
+
+#### 练习15.18
+```cpp
+    Base::Pub_Derv d1;
+    Base::Priv_Derv d2;
+    Base::Prot_Derv d3;
+    Base::Dervied_from_Public dd1;
+    Base::Dervied_from_Private dd2;
+    Base::Dervied_from_Protected dd3;
+    Base::Base *p = &d1; //合法，public继承
+    // p = &d2;
+    // p = &d3;
+    p = &dd1;//合法，public继承
+    // p = &dd2;
+    // p = &dd3;
+    // 只有派生类是完全使用Public继承基类才能使用派生类往基类转换。
+```
+
+
+#### 练习15.19
+```cpp
+struct Dervied_from_Private: private Priv_Derv{
+    int use_base(){return prot_mem;}
+    // void memfcn(Base& b) {b = *this;}
+    //派生类对直接基类的类型访问都是允许的
+    //如果派生类对于间接基类的访问说明符是public和protected，也是允许的
+    //但是派生类的直接基类对于间接基类是private，那么完成类型转换(直接基类修饰成private了)
+};
+
+```
+
+#### 练习15.20
+上述。
+
+#### 练习15.21
+```cpp
+//基类几何图形
+class Geometric{};
+
+class Geometrice2D: GeoMetrice{};
+class Geometrice3D: GeoMetrice{};
+//派生类 矩形
+class Rectangle : public Geometric2D{};
+//派生类 圆形
+class Circle : public Geometric2D{};
+//派生类 球形
+class Sphere : public Geometric3D{};
+//派生类 锥形
+class Cone : public Geometric3D{};
+```
+
+
+#### 练习15.22
+```cpp
+#ifndef GEOMETRIC_HPP
+#define GEOMETRIC_HPP
+    class Geometric{
+        public:
+            Geometric(double w, double h):_w(w),_h(h){}
+        protected:
+            double _w;
+            double _h;
+    };
+
+    class Geometric2D:public Geometric{
+        public:
+            Geometric2D(double w, double h):Geometric(w, h){};
+            virtual double aera() = 0;
+    };
+
+    class Geometric3D:public Geometric{
+        public:
+            Geometric3D(double w, double h, double l):Geometric(w, h),_length(l){}
+            virtual double volume() = 0;
+        protected:
+            double _length;
+    };
+
+    class Rectangle :public Geometric2D{
+        public:
+            Rectangle(double w, double h):Geometric2D(w, h){}
+            double aera() override{
+                return _w * _h;
+            }
+    };
+
+    class Circle : public Geometric2D{
+        public:
+            Circle(double w,double h):Geometric2D(w,h){}
+            double aera() override{
+                return _h*PI;
+            }
+        private:
+            inline static double PI = 3.14; 
+    };
+
+    class Sphere : public Geometric3D{
+        public:
+            Sphere(double w, double h,double l):Geometric3D(w, h, l){}
+            double volume() override{
+                return (4/3)*PI * _w * _h*_length;
+            }
+        private:
+        inline static double PI = 3.14;
+    };
+
+    class Cone: public Geometric3D{
+        public:
+            Cone(double w, double h, double l):Geometric3D(w, h, l){}
+            double volume() override{
+                return (1/3)*PI*_h*_w*_length;
+            }
+        private:
+            inline static double PI = 3.14;
+    };
+#endif
+```
+
+
+## 15.6 继承中的类作用域
+派生类的作用域嵌套在基类的作用域之内
+
+```mermaid
+flowchart TD
+    subgraph B [基类作用域]
+        direction TB
+        B_Member["基类成员<br>int base_var;<br>void func();"]
+    end
+
+    subgraph D [派生类作用域]
+        direction TB
+        D_Member["派生类成员<br>int derived_var;"]
+    end
+
+    D -- “嵌套在内部” --> B
+
+    Lookup["在派生类中查找一个名字"] --> InD{“在 D 中<br>找到？”}
+    InD -- 是 --> FoundD[“直接使用 D 中的定义”]
+    InD -- 否 --> InB{“在 B 中<br>找到？”}
+    InB -- 是 --> FoundB[“使用 B 中的定义（继承而来）”]
+    InB -- 否 --> NotFound[“最终未找到，编译错误”]
+
+    style B fill:#e1f5fe
+    style D fill:#f3e5f5
+```
+
+```cpp
+//代码中
+class B{};
+class D : public B{};
+
+//二进制中
+class B{
+    class D : public B{
+
+    };
+};
+```
+
+### 在编译时进行名字查找
+对象、指针、引用的静态类型决定了那些成员可见。
+<br><p style= "color:gold">基类的静态类型无法访问到派生类的模型，(哪怕动态编译)。</p></br>
+
+关键点与设计哲学
+1. 安全第一：这条规则保证了类型安全。如果编译器允许bp->derived_only()通过，而bp实际指向的可能只是一个纯Base对象（那里根本没有derived_only函数），程序就会在运行时崩溃。C++通过在编译期禁止这种操作来避免这类错误。
+2. 接口与实现分离：基类的指针或引用定义了一个公共接口。用户通过这个接口操作对象，无需关心具体的派生类类型。派生类则负责提供这个接口的不同实现。这正是多态的精髓。
+3. 动态绑定的条件：要让运行时多态发生，必须同时满足两个条件：
+   1. 方法在基类中被声明为 virtual。
+   2. 通过基类的指针或引用来调用该方法。
+此时，虽然函数名字是静态查找的（必须在基类中找到），但函数的最终实现（函数体） 是在运行时根据对象的动态类型决定的。
+
+### 名字冲突与继承
+和作用域一样，派生类可以通过重复声明覆盖基类的成员名。
+```cpp
+class Base{
+    public:
+        Base():mem(0){}
+    protected:
+        int mem;
+};
+
+class Derived:public Base{
+    public:
+        Derived(int i):mem(i){}
+        int get_mem() const { return mem;}//返回的是Derived的mem
+    protected:
+        int mem;
+}
+```
+派生类的成员将隐藏基类的同名成员。
+
+### 通过作用域运算符来使用被隐藏的成员
+```cpp
+class Derived: public Base{
+    public:
+        int get_base_mem() const {return Base::mem;}
+}
+```
+作用域会覆盖原有的查找规则，直接跳出派生类，从你选择的作用域开始查找。
+
+<p style = "color:red">除了虚函数，否则不建议重新声明基类中的相同名字的成员。</p>
+
+### 一如往常，名字查找先于类型检查
+内层作用域的函数不会重载声明在外层作用域的函数。
+1. 定义在派生类中的成员函数不会重载基类的成员函数。
+2. 派生类的成员函数与基类同名则会隐藏基类的成员函数。(即使形参列表不一样。)
+
+```cpp
+struct Base{
+    int memfcn();
+};
+
+struct Derived : Base{
+    int memfcn(int);
+}
+
+Derived d;
+Base b;
+b.memfcn(); //Base的memfcn
+d.memfcn(10);//Dervied的memfcn
+// d.memfcn(); Base的memfcn被隐藏了，导致形参列表不一致，报错
+d.Base::memfcn(); //通过作用域规则，直接调用Base的memfcn
+```
+
+### 虚函数与作用域
+虚函数必须与基类有相同的形参列表。否则，基类的虚函数被隐藏，导致动态绑定不生效。
+```cpp
+struct Base{
+    virtual void memfcn();
+}
+
+struct D : Base{
+    // void memfcn(int) override{}
+    // override关键字能帮我们查找虚表 所以虽然override不是必写。
+    // 但override可以帮我们检查函数签名是否一致
+    // 如果没有使用override 这段代码会因为同名直接隐藏我们基类的虚函数
+}
+```
+
+### 通过基类调用隐藏的虚函数
+```cpp
+class Base{
+    public:
+        virtual int fcn();
+};
+
+class D1 : public Base{
+    public:
+        int fcn(int);
+        virtual void f2();
+};
+
+class D2 : public D1{
+    public:
+        int fcn(int);
+        int fcn();
+        void f2();
+};
+
+Base bobj;D1 d1obj; D2 d2obj;
+Base *bp1 = & bobj, *bp2 = &d1obj, *bp3 = &d2obj;
+bp1->fcn();     //虚调用 Base::fcn()
+bp2->fcn();     //虚调用 Base::fcn()
+bp3->fcn();     //虚调用 D2::fcn()
+
+D1 *d1p = &d1obj; D2* d2p = *d2obj;
+bp2 -> f2();    //静态类型错误， Base没有f2() 
+d1p ->f2();     //虚调用 D1::f2()
+d2p -> f2();    //虚调用 D2::f2()
+```
+
+### 覆盖重载的函数
+成员函数无论是否是虚函数都能被重载。
+1. 派生类可以覆盖重载函数的0/多个实例。
+2. 派生类希望所有重载函数都可见：覆盖所有/0个实例。
+3. 通过using将基类的函数添加到派生类中。
+
+### 15.6节练习
+
+#### 练习15.23
+```cpp
+class Base{
+    public:
+        virtual int fcn();
+};
+
+class D1 : public Base{
+    public:
+        int fcn();
+        virtual void f2();
+};
+
+class D2 : public D1{
+    public:
+        int fcn(int);
+        int fcn();
+        void f2();
+};
+
+Base bobj;D1 d1obj; D2 d2obj;
+Base *bp1 = & bobj, *bp2 = &d1obj, *bp3 = &d2obj;
+bp1->fcn();     //虚调用 Base::fcn()
+bp2->fcn();     //虚调用 D1::fcn()
+bp3->fcn();     //虚调用 D2::fcn()
+
+D1 *d1p = &d1obj; D2* d2p = *d2obj;
+bp2 -> f2();    //静态类型错误， Base没有f2() 
+d1p ->f2();     //虚调用 D1::f2()
+d2p -> f2();    //虚调用 D2::f2()
+
+Base* p1 = &d2obj;
+D1* p2 = &d2obj;
+D2* p3 = &d2obj;
+
+p1->fcn(42); //Base 没有fcn(int)
+p2->fcn(42); //D1 没有fcn(int)
+p3->fcn(42); //静态调用 D2::fcn(int)
+```
+
+
+## 15.7 构造函数和拷贝控制
+继承体系的类也需要：创建、拷贝、移动、赋值和销毁。
+
+### 15.7.1 虚析构函数
+继承关系对基类拷贝控制最直接的影响是基类通常应该定义一个虚析构函数来动态分配继承体系中的对象。
+
+虚析构函数也是一种虚函数，当我们使用指针、引用的时候触发多态可以通过动态绑定来确定析构函数的版本。
+
+<p style="color:gold">如果基类的析构函数不是虚函数，则delete一个指向派生类的基类指针、基类引用会使用基类的析构函数，这会触发C++里的未定义行为(UB:undefined behavior)</p>
+
+<table>
+    <tr>
+        <th>三/五法则</th>
+        <th>拷贝构造函数</th>
+        <th>拷贝赋值运算符</th>
+        <th>移动构造函数</th>
+        <th>移动赋值运算符</th>
+        <th>析构函数</th>
+    </tr>
+    <tr>
+        <td>正常情况下</td>
+        <td>✔</td>
+        <td>✔</td>
+        <td>可能有</td>
+        <td>可能有</td>
+        <td>✔</td>
+    </tr>
+    <tr>
+        <td>基类的析构函数</td>
+        <td>✔</td>
+        <td>✔</td>
+        <td>可能有</td>
+        <td>可能有</td>
+        <td>必须是virtual,确保派生类对象可以正确析构</td>
+    </tr>
+</table>
+
+### 虚析构函数将阻止合成移动操作
+基类需要虚析构函数的影响：如果一个类定义了析构函数，编译器不会为这个类合成移动操作。
+
+### 15.7.1节练习
+#### 练习15.24
+1. 继承体系里的基类必须定义虚析构函数。
+2. 虚析构函数在基类指针、引用的时候确保可以通过虚表来删除正确的派生类对象。
+
+### 15.7.2 合成拷贝控制与继承
+基类/派生类的合成拷贝控制成员的行为与其他合成的构造函数、赋值运算符或析构函数一致。
+
+### 派生类中删除的拷贝控制与积累的关系
+基类或派生类不定义拷贝控制函数的情况下，会与其它普通类一样由编译器自动合成。
+1. 基类的默认构造函数、拷贝构造函数、拷贝赋值运算符或析构函数是被删除的或者private的，则派生类这些成员也是被删除的。——编译器无法使用基类成员来构造、赋值、析构。
+2. 基类有一个不可访问或删除的析构函数，则派生类中合成的默认和拷贝构造函数也是被删除的。——无法析构基类的切片。
+3. 编译器无法合成删掉的移动操作。——基类的切片不存在移动函数、所以基类切片无法移动。
+
+```cpp
+class B{
+    public:
+        B();
+        //拷贝构造函数被删除
+        B(const B&) = delete;
+};
+
+class D: public B{
+    //由于基类的拷贝构造函数被删除，编译器不会为派生类合成移动构造函数和拷贝构造函数。
+    //D无法移动、拷贝基类的切片
+};
+
+D d;//正确
+D d2(d);//错误，基类的拷贝构造函数被删除
+D d3(std::move(d));//错误 隐式使用基类的拷贝构造函数
+```
+
+### 移动操作与继承
+大多数基类都会定义一个虚析构函数，所以：
+1. 基类通常不包含合成的移动操作。
+2. 因为基类没有移动操作，对应的派生类也没有移动操作。
+
+如果我们需要移动操作，我们必须显式定义。
+```cpp
+#ifndef QUOTE_HPP
+#define QUOTE_HPP
+
+#include <iostream>
+#include <string>
+class Quote {
+public:
+  Quote() = default;
+  Quote(const std::string &book, double sales_price):bookNo(book), price(sales_price){}
+
+  Quote(const Quote&) = default;
+  Quote(Quote&&) noexcept = default;
+  Quote& operator=(const Quote&) = default;
+  Quote& operator=(Quote&&) noexcept = default;
+
+  std::string isbn() const { return bookNo;}
+  virtual double net_price(std::size_t n) const { return n * price; };
+  virtual ~Quote() = default;
+
+  virtual void debug() const {std::cout << "bookNo: " << bookNo 
+                                        << " price: " << price 
+                                        << std::endl;}
+private:
+    std::string bookNo;
+protected:
+  double price = 0.0;
+};
+
+#endif // QUOTE_HPP
+```
