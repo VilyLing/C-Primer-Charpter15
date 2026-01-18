@@ -1873,3 +1873,391 @@ protected:
 
 #endif // QUOTE_HPP
 ```
+
+### 15.7.2节练习
+
+#### 练习15.25
+我们前面说过每一个类都需要自己控制自己的成员。
+如果Disc_quote的默认构造函数删除的话。
+1. 如果没有显式定义，编译器会自动合成一个合成的构造函数。前提是没有写其他构造函数。
+2. Bulk_quote需要先调用直接基类的构造函数。如果Disc_quote删除了构造函数的话，自身需要调用直接基类的构造函数的前提下，无法初始化自身。
+3. 在C++的类继承体系中，每个派生类的构造函数都只负责调用其直接基类的构造函数。它不负责，也无法直接调用间接基类的构造函数。间接基类的构造是由直接基类的构造函数在其初始化列表中完成的。
+
+## 15.7.3 派生类的拷贝控制成员
+派生类构造函数：不仅需要初始化自身，还需要初始化派生类对象的基类部分。
+1. 拷贝和移动需要拷贝、移动自身成员。
+2. 负责拷贝和移动基类的拷贝、移动函数。
+3. 赋值运算符同上。
+
+派生类析构函数：只负责销毁自身分配的资源。
+
+<p style="color:gold">当派生类定义了拷贝、移动操作，要负责自身包括基类成员在内的对象</p>
+
+### 定义派生类的拷贝或移动构造函数
+通常使用对应的基类函数来初始化基类部分。
+```cpp
+class Base{/*...*/};
+
+class D: public Base{
+    public:
+        D(const D& d) : Base(d), (d 自身成员){}
+        D(D&& d) : Base(std::move(d)),(d自身成员) noexcept{}
+};
+```
+
+### 派生类赋值运算符
+派生类的赋值运算符也必须显式为其积累部分赋值。
+```cpp
+D& D::operator=(const D& rhs){
+    B::operator=(rhs);
+    /*为派生类D的成员赋值*/
+    return *this
+}
+```
+
+### 派生类析构函数
+在析构函数执行完成后，对象的成员会被隐式销毁。—— 基类部分也是隐式销毁，所以派生类只负责处理自己分配的资源。
+```cpp
+class D: public Base{
+    public:
+        ~D(){/*销毁自身的资源*/}
+
+};
+```
+与构造函数和赋值运算符唯一不同的是：
+1. 构造函数和赋值运算是先构建基类部分。
+2. 析构函数是先从派生类开始析构直至基类。
+
+### 在构造函数和析构函数中调用虚函数
+构建派生类对象：
+1. 基类部分优先构造。此时，派生类对象未初始化。 —— 此时访问派生类会出错
+2. 派生类对象构造，基类部分构造完成。
+
+销毁派生类对象：
+1. 优先销毁派生类对象，此时基类对象还存在。 —— 此时访问派生类成员会出错
+2. 再销毁基类部分，派生类对象已经被销毁。
+
+<p style = "color:red">构造函数或析构函数调用了某个虚函数，则我们应该调用虚函数对应的版本。</p>
+
+### 15.7.3节练习
+#### 练习15.26
+```cpp
+//Quote.hpp
+#ifndef QUOTE_HPP
+#define QUOTE_HPP
+
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <utility>
+
+#define LOG(X) std::cout << X << std::endl
+class Quote {
+public:
+  Quote() { LOG("Quote()"); }
+  Quote(const std::string &book, double sales_price)
+      : bookNo(book), price(sales_price) {
+    LOG("Quote(parameter list...)");
+  }
+  Quote(const Quote &);
+  Quote(Quote &&) noexcept;
+  Quote &operator=(const Quote &);
+  Quote &operator=(Quote &&) noexcept;
+  std::string isbn() const { return bookNo; }
+  virtual double net_price(std::size_t n) const { return n * price; };
+  virtual ~Quote() { std::cout << "~Quote()" << std::endl; }
+
+  virtual void debug() const {
+    std::cout << "bookNo: " << bookNo << " price: " << price << std::endl;
+  }
+
+private:
+  std::string bookNo;
+
+protected:
+  double price = 0.0;
+
+  void swap(Quote &rhs) {
+    using std::swap;
+    swap(bookNo, rhs.bookNo);
+    swap(price, rhs.price);
+  }
+};
+
+Quote::Quote(const Quote &rhs) : bookNo(rhs.bookNo), price(rhs.price) {
+  LOG("Quote(const Quote&)");
+}
+Quote::Quote(Quote &&rhs) noexcept
+    : bookNo(std::move(rhs.bookNo)), price(std::move(rhs.price)) {
+  LOG("Quote(Quote&&)");
+}
+Quote &Quote::operator=(const Quote &rhs) {
+  LOG("Quote& operator=(const Quote&)");
+  if (this != &rhs) {
+    bookNo = rhs.bookNo;
+    price = rhs.price;
+  }
+  return *this;
+}
+Quote &Quote::operator=(Quote &&rhs) noexcept {
+  LOG("Quote& operator=(Quote&&)");
+
+  if (this != &rhs) {
+    swap(rhs);
+    rhs.bookNo = std::string();
+    rhs.price = 0;
+  }
+  return *this;
+}
+#endif // QUOTE_HPP
+
+//Disc_quote.hpp
+#pragma once
+
+#include "Quote.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <iostream>
+#include <string>
+#include <utility>
+class Disc_quote : public Quote {
+public:
+  Disc_quote(){LOG("Disc_Quote()");};
+  Disc_quote(const std::string &book, double price, std::size_t qty,
+             double disc)
+      : Quote(book, price), quantity(qty), discount(disc) { LOG("Disc_Quote(parameter list...)");}
+  Disc_quote(const Disc_quote&);
+  Disc_quote(Disc_quote&&) noexcept;
+  Disc_quote& operator=(const Disc_quote&);
+  Disc_quote& operator=(Disc_quote&&) noexcept;
+
+  double net_price(std::size_t) const = 0;
+
+  std::pair<size_t, double> discount_policy() const {
+    return std::make_pair(quantity, discount);
+  }
+
+  ~Disc_quote() { std::cout << "~Disc_quote()" << std::endl; }
+
+protected:
+  std::size_t quantity = 0;
+  double discount = 0.0;
+  void swap(Disc_quote &rhs) {
+    using std::swap;
+    Quote::swap(rhs);
+    swap(quantity, rhs.quantity);
+    swap(discount, rhs.discount);
+  }
+};
+
+double Disc_quote::net_price(std::size_t n) const {
+  std::cout << "Disc_quote::net_price()" << std::endl;
+  return 0.0;
+}
+
+Disc_quote::Disc_quote(const Disc_quote& rhs):Quote(rhs),quantity(rhs.quantity),discount(rhs.discount)
+{LOG("Disc_quote(const Disc_quote&)");}
+Disc_quote::Disc_quote(Disc_quote&& rhs) noexcept
+    :Quote(rhs),quantity(std::move(rhs.quantity)),discount(std::move(rhs.discount))
+    {LOG("Disc_quote(Disc_quote&&)");}
+Disc_quote& Disc_quote::operator=(const Disc_quote& rhs){
+    LOG("Disc_quote& operator=(const Disc_quote&)");
+    if (this != &rhs) {
+        Quote::operator=(rhs);
+        quantity = rhs.quantity;
+        discount = rhs.discount;
+    }
+    return *this;
+}
+
+Disc_quote& Disc_quote::operator=(Disc_quote&& rhs) noexcept{
+    LOG("Disc_quote& operator=(Disc_quote&&)");
+    if (this != &rhs) {
+        Quote::operator=(rhs);
+        swap(rhs);
+    }
+    return *this;
+}
+//Bulk_quote.hpp
+#pragma once
+
+#include "Disc_quote.hpp"
+#include "Quote.hpp"
+#include <iostream>
+#include <string>
+class Bulk_quote : public Disc_quote{
+    public:
+    Bulk_quote(){LOG("Bulk_quote()");};
+    Bulk_quote(const std::string& book,double price,std::size_t qty,double disc):Disc_quote(book, price, qty, disc){
+        LOG("Bulk_quote(parameter list...)");
+    }
+
+    Bulk_quote(const Bulk_quote& rhs);
+    Bulk_quote& operator=(const Bulk_quote& rhs);
+    Bulk_quote(Bulk_quote&& rhs) noexcept;
+    Bulk_quote& operator=(Bulk_quote&& rhs) noexcept;
+
+    ~Bulk_quote(){LOG("~Bulk_quote()");}
+    //price 是 基类的 protected 成员 可以直接访问
+    double net_price(std::size_t n) const override{
+        if (n > quantity) {
+            return  n * (1 - discount) * price;
+        } else {
+            return price * n;
+        }
+    }
+    void debug() const override {
+        std::cout << "min_qty: " << quantity 
+                  << " discount: " << discount
+                  << std::endl;
+    }
+
+};
+
+    Bulk_quote::Bulk_quote(const Bulk_quote& rhs):Disc_quote(rhs){
+        LOG("Bulk_quote(const Bulk_quote&)");
+    }
+    Bulk_quote& Bulk_quote::operator=(const Bulk_quote& rhs){
+        Disc_quote::operator=(rhs);
+        LOG("Bulk_quote operator=(const Bulk_quote&)");
+
+    }
+    Bulk_quote::Bulk_quote(Bulk_quote&& rhs) noexcept:Disc_quote(rhs){
+        LOG("Bulk_quote(Bulk_quote&&)");
+    }
+    Bulk_quote& Bulk_quote::operator=(Bulk_quote&& rhs) noexcept{
+        Disc_quote::operator=(rhs);
+        LOG("Bulk_quote operator=(Bulk_quote&&)");
+
+    }
+
+//void test()
+
+void test(){
+    Quote base("C++ Primer",128.0);
+    Bulk_quote bulk("Core Python Programming",89,0,0.19);
+}
+
+/*打印内容 clang-cl 下
+Quote(parameter list...)
+Quote(parameter list...)
+Disc_Quote(parameter list...)
+Bulk_quote(parameter list...)
+按基类构造函数来顺序构建对象
+ 
+~Bulk_quote()
+~Disc_quote()
+~Quote()
+~Quote()
+后创建的对象优先析构
+*/
+```
+
+## 15.7.4 继承的构造函数
+在C++11中，派生类能直接重用其直接基类定义的构造函数。
+```cpp
+class Bulk_quote:public Disc_quote{
+    public:
+        using Disc_quote::Disc_quote;
+    
+};
+//一个类只初始化它的直接基类，同样的也只继承直接基类的构造函数。
+```
+
+类不能继承默认、拷贝和移动构造函数。如果派生类没有显式定义、那么编辑器会自动合成它们。 
+如果派生类有自己的数据成员，在使用了直接基类的构造函数，自身成员会被默认初始化。
+
+### 继承的构造函数的特点
+1. 构造函数的`using`声明不会改变该构造函数的访问级别。
+2. `using`声明也无法指定`explicit`和`constexpr`,继承的构造函数拥有相同的特性。
+
+当基类构造函数含有默认实参时，实参不会被继承。—— 在c++17之后，继承的派生类会考虑默认参数。
+
+基类含有几个构造函数，大多数情况派生类会继承所有构造函数。
+
+除了下列情况：
+1. 派生类可以继承一部分构造函数，为其他的构造函数定义自己的版本。—— 只要构造函数的参数列表和基类的相同。 
+2. 默认、拷贝和移动构造函数不会被继承。
+
+### 15.7.4节练习
+#### 练习15.27
+```cpp
+#pragma once
+
+#include "Disc_quote.hpp"
+#include "Quote.hpp"
+#include <iostream>
+#include <string>
+class Bulk_quote : public Disc_quote{
+    public:
+    using Disc_quote::Disc_quote;
+    //price 是 基类的 protected 成员 可以直接访问
+    double net_price(std::size_t n) const override{
+        if (n > quantity) {
+            return  n * (1 - discount) * price;
+        } else {
+            return price * n;
+        }
+    }
+    void debug() const override {
+        std::cout << "min_qty: " << quantity 
+                  << " discount: " << discount
+                  << std::endl;
+    }
+
+};
+```
+
+## 15.8 容器与继承
+当我们使用容器存放继承体系中的对象时，通常必须采取间接存储的方式。
+
+原因：容器不允许存放不同类型的元素，所以无法将具有继承关系的多种类型的对象直接存储在容器中。
+
+<p style="color:gold">当派生类被赋值给基类对象，派生类对象被切片。</p>
+
+### 在容器中放置(智能)指针而非对象
+当我们在容器中存储具有继承关系的对象，我们实际上应该存放基类的指针(动态绑定)。
+
+```cpp
+vector<shared_ptr<Quote> basket>;
+basket.push_back(make_shared<Quote>("0-201-82470-1",50));
+basket.push_back(make_shared<Bulk_quote>("0-201-54848-8",50,10,0.25));
+cout << basket.back()->net_price(15) <<endl;
+```
+智能指针也能跟普通指针一样，实现动态绑定。
+
+### 15.8节练习
+#### 练习15.28
+```cpp
+  Bulk_quote bulk("Core Python Programming",39.99,10,0.19);
+  Quote base("C++ Primer",128.0);
+
+
+  std::vector<Quote> basket_mem;
+  basket_mem.push_back(base);
+  basket_mem.push_back(bulk);
+  double item_price = 0.0;
+  for (auto it = basket_mem.begin(); it != basket_mem.end(); ++it) {
+    item_price += it->net_price(15);
+  }
+  std::cout << "Item vector price sum = " << item_price << std::endl;
+
+  //输出 Item vector price sum = 2519.85
+```
+#### 练习15.29
+```cpp
+  std::vector<std::shared_ptr<Quote>> basket_sptr;
+  basket_sptr.push_back(std::make_shared<Quote>(base));
+  basket_sptr.push_back(std::make_shared<Bulk_quote>(bulk));
+  double ptr_price = 0.0;
+  for (auto it = basket_sptr.begin(); it != basket_sptr.end(); ++it) {
+      ptr_price += (*it)->net_price(15);
+  }
+  std::cout << "SharedPtr vector price sum = " << ptr_price << std::endl;
+  //输出 SharedPtr vector price sum = 2405.88
+```
+
+## 15.8.1 编写Basket类
+对于C++面向对象的编程悖论： 无法直接使用对象进行面向对象编程。
+
+我们必须使用指针或引用，因为指针会增加复杂性，所以需要辅助类来处理复杂的业务逻辑。
