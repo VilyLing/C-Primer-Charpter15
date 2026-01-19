@@ -12,14 +12,8 @@
 #include <ostream>
 #include <string>
 #include <vector>
+#include "Basket.hpp"
 
-
-double print_total(const Quote &item, std::size_t n) {
-  double ret = item.net_price(n);
-  std::cout << "ISBN: " << item.isbn() << " # sold: " << n
-            << " total due: " << ret << std::endl;
-  return ret;
-}
 
 double print_total_use_parm(const Quote item, std::size_t n) {
   double ret = item.net_price(n);
@@ -27,6 +21,7 @@ double print_total_use_parm(const Quote item, std::size_t n) {
             << " total due: " << ret << std::endl;
   return ret;
 }
+
 
 int main() {
   // Quote q ("abcd", 4.99);
@@ -36,19 +31,22 @@ int main() {
   // print_total(bq, 30);
   // print_total_use_parm(bq, 30);
 
-  Base::Base b;
-  Base::Pub_Derv pub;
-  Base::Priv_Derv priv;
-  Base::Prot_Derv prot;
+  Bulk_quote bulk("Core Python Programming",39.99,10,0.19);
+  Quote base("C++ Primer",128.0);
 
-  pub.memfcn(b);
-  priv.memfcn(b);
-  prot.memfcn(b);
-  // Base::Pub_Derv_Use_Base(b, pub);
-  // Base::Priv_Derv_Use_Base(b, priv);
-  // Base::Prot_Derv_Use_Base(b, prot);
 
-  std::cout <<"Test" << std::endl;
+ 
+  Basket basket;
+
+  
+    basket.add_item(bulk.clone());
+    basket.add_item(std::make_shared<Quote>(base));
+    basket.add_item(std::make_shared<Quote>(Bulk_quote("C++ Primer",128.0,10,0.25)));
+    basket.add_item(std::make_shared<Quote>(Bulk_quote("Core Python Programming",39.99,10,0.19)));
+
+    basket.total_receipt(std::cout);
+  
   std::cin.get();
+
   return 0;
 }
